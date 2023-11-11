@@ -1,0 +1,15 @@
+{
+    "back_count":20,   
+    "cache_duration":120,
+    "capture_rect":{
+        "height":300,
+        "width":300,
+        "x":300,
+        "y":300
+    },
+    "column_count":4,
+    "front_count":20,
+    "log_level":2,    
+    "record_frame_rate":30,
+    "row_count":4
+}
