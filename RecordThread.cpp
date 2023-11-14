@@ -59,7 +59,7 @@ void CRecordThread::CaptureScreen()
 	BitBlt(m_hMemDC, 0, 0, m_captureRect.Width(), m_captureRect.Height(), m_hScreenDC, 
 		m_captureRect.left, m_captureRect.top, SRCCOPY);
 
-	CDataManager::Get()->FrameArrive(HBITMAP_SHARED_PTR(hBitmap));
+	CDataManager::Get()->FrameArrive(HBITMAP_SHARED_PTR(hBitmap, HBitmapDeleter()));
 
 	// Clean up resources
 	SelectObject(m_hMemDC, hOldBitmap);	

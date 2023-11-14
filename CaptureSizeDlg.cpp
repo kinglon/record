@@ -31,6 +31,7 @@ void CCaptureSizeDlg::DoDataExchange(CDataExchange* pDX)
 BEGIN_MESSAGE_MAP(CCaptureSizeDlg, CDialogEx)
 	ON_WM_KEYDOWN()
 	ON_WM_DESTROY()
+	ON_WM_CTLCOLOR()
 END_MESSAGE_MAP()
 
 
@@ -39,23 +40,6 @@ END_MESSAGE_MAP()
 
 void CCaptureSizeDlg::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
 {
-	if (nChar == VK_ESCAPE)
-	{
-		DestroyWindow();
-	}
-	else if (nChar == VK_RETURN)
-	{
-		CRect rect;
-		GetWindowRect(&rect);
-		CRecordThread::SetCaptureRect(rect);
-
-		rect.OffsetRect(m_screenOrigin.x * -1, m_screenOrigin.y * -1);
-		CSettingManager::GetInstance()->SetCaptureRect(rect);
-
-		CRecordThread::StartRecord();
-		DestroyWindow();
-	}
-
 	CDialogEx::OnKeyDown(nChar, nRepCnt, nFlags);
 }
 
@@ -66,7 +50,7 @@ BOOL CCaptureSizeDlg::OnInitDialog()
 
 	// Make the dialog half-transparent
 	SetWindowLongPtr(m_hWnd, GWL_EXSTYLE, GetWindowLongPtr(m_hWnd, GWL_EXSTYLE) | WS_EX_LAYERED);
-	SetLayeredWindowAttributes(0, 50, LWA_ALPHA);
+	SetLayeredWindowAttributes(0, 100, LWA_ALPHA);	
 
 	return TRUE;  // return TRUE unless you set the focus to a control
 	// 异常: OCX 属性页应返回 FALSE
@@ -81,4 +65,48 @@ void CCaptureSizeDlg::OnDestroy()
 	{
 		delete this;
 	}
+}
+
+
+BOOL CCaptureSizeDlg::PreTranslateMessage(MSG* pMsg)
+{
+	if (pMsg->message == WM_KEYDOWN)
+	{
+		if (pMsg->wParam == VK_ESCAPE)
+		{
+			DestroyWindow();
+			return TRUE;
+		}
+		else if (pMsg->wParam == VK_RETURN)
+		{
+			CRect rect;
+			GetWindowRect(&rect);
+			CRecordThread::SetCaptureRect(rect);
+
+			rect.OffsetRect(m_screenOrigin.x * -1, m_screenOrigin.y * -1);
+			CSettingManager::GetInstance()->SetCaptureRect(rect);
+
+			CRecordThread::StartRecord();
+			DestroyWindow();
+			return TRUE;
+		}
+	}
+
+	return CDialogEx::PreTranslateMessage(pMsg);
+}
+
+
+HBRUSH CCaptureSizeDlg::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
+{
+	HBRUSH hbr = CDialogEx::OnCtlColor(pDC, pWnd, nCtlColor);
+
+	if (nCtlColor == CTLCOLOR_DLG)
+	{
+		static COLORREF bgColor = RGB(0, 0, 255);
+		static HBRUSH hBursh = (HBRUSH)CreateSolidBrush(bgColor);
+		pDC->SetBkColor(bgColor);
+		hbr = hBursh;
+	}
+
+	return hbr;
 }

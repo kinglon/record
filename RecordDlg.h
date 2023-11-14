@@ -120,6 +120,8 @@ private:
 	// 通过按键按张播放
 	void PlayByFrame(bool nextFrame);
 
+	bool IsPlayFinish();
+
 	void ScalePlayingImage(short delta);
 
 	void MovePlayingImage();

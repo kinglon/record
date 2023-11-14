@@ -324,19 +324,16 @@ void CRecordDlg::CtrlMovePos(CWnd* ctrl, int deltaX, int deltaY)
 
 void CRecordDlg::CtrlShowBlack(CStatic* ctrl)
 {
-	if (ctrl->GetBitmap() != NULL)
-	{
-		DeleteObject(ctrl->GetBitmap());
-		ctrl->SetBitmap(NULL);
-	}
-
 	CRect wndRect;
 	ctrl->GetClientRect(&wndRect);
 
 	CBitmap bitmap;
 	bitmap.CreateBitmap(wndRect.Width(), wndRect.Height(), 1, 1, nullptr);
-	ctrl->SetBitmap(bitmap);
-	bitmap.Detach();
+	HBITMAP hOldBmp = ctrl->SetBitmap((HBITMAP)bitmap.Detach());
+	if (hOldBmp != NULL)
+	{
+		DeleteObject(hOldBmp);
+	}
 }
 
 void CRecordDlg::RefreshGrids()
@@ -554,31 +551,45 @@ void CRecordDlg::CtrlShowBitmap(CStatic* ctrl, HBITMAP_SHARED_PTR bitmap)
 	int controlHeight = rect.Height();
 	double widthRatio = controlWidth * 1.0 / imageWidth;
 	double heightRatio = controlHeight * 1.0 / imageHeight;
-	double aspectRatio = min(widthRatio, heightRatio);
-	int displayWidth = (int)(imageWidth * aspectRatio);
-	int displayHeight = (int)(imageHeight * aspectRatio);
 
-	Gdiplus::Bitmap scaledImage(displayWidth, displayHeight, originalImage->GetPixelFormat());
-	Gdiplus::Graphics graphics(&scaledImage);
-	graphics.SetInterpolationMode(Gdiplus::InterpolationMode::InterpolationModeHighQualityBicubic);
-	graphics.DrawImage(originalImage, 0, 0, displayWidth, displayHeight);
-	delete originalImage;
-	originalImage = nullptr;
-
-	if (ctrl->GetBitmap() != NULL)
+	CRect displayRect;
+	if (widthRatio < heightRatio)
 	{
-		DeleteObject(ctrl->GetBitmap());
-		ctrl->SetBitmap(NULL);
+		int y = (int)((controlHeight - imageHeight * widthRatio) / 2);
+		displayRect.SetRect(0, y, controlWidth, y + (int)(imageHeight * widthRatio));
+	}
+	else
+	{
+		int x = (int)((controlWidth - imageWidth * heightRatio) / 2);
+		displayRect.SetRect(x, 0, x + (int)(imageWidth * heightRatio), controlHeight);
 	}
 
-	HBITMAP hScaledImage = NULL;
-	Gdiplus::Status status = scaledImage.GetHBITMAP(Gdiplus::Color::Black, &hScaledImage);
+	Gdiplus::Bitmap displayImage(controlWidth, controlHeight, originalImage->GetPixelFormat());
+	Gdiplus::Graphics graphics(&displayImage);	
+	Gdiplus::SolidBrush blackBrush(Gdiplus::Color::Black);
+	graphics.FillRectangle(&blackBrush, 0, 0, displayImage.GetWidth(), displayImage.GetHeight());
+	graphics.SetInterpolationMode(Gdiplus::InterpolationMode::InterpolationModeHighQualityBicubic);
+	graphics.DrawImage(originalImage, displayRect.left, displayRect.top, displayRect.Width(), displayRect.Height());
+	delete originalImage;
+	originalImage = nullptr;	
+
+	HBITMAP hBitmap = NULL;
+	Gdiplus::Status status = displayImage.GetHBITMAP(Gdiplus::Color::Black, &hBitmap);
 	if (status != Gdiplus::Ok)
 	{
 		LOG_ERROR(L"failed to call GetHBITMAP, error is %d", status);
 		return;
 	}
-	ctrl->SetBitmap(hScaledImage);
+
+	HBITMAP hOldBmp = ctrl->SetBitmap(hBitmap);
+	if (hOldBmp != NULL)
+	{
+		DeleteObject(hOldBmp);
+	}
+	if (ctrl->GetBitmap() != hBitmap)
+	{
+		DeleteObject(hBitmap);
+	}
 }
 
 void CRecordDlg::PlayWindowShowBitmap(HBITMAP_SHARED_PTR bitmap)
@@ -617,12 +628,6 @@ void CRecordDlg::PlayWindowShowBitmap(HBITMAP_SHARED_PTR bitmap)
 	m_playImage.m_cropHeight = displayHeight;
 	m_playImage.m_centerPos = CPoint(displayWidth/2, displayHeight/2);
 
-	if (m_playWindowCtrl.GetBitmap() != NULL)
-	{
-		DeleteObject(m_playWindowCtrl.GetBitmap());
-		m_playWindowCtrl.SetBitmap(NULL);
-	}
-
 	HBITMAP hScaledImage = NULL;
 	Gdiplus::Status status = scaledImage.GetHBITMAP(Gdiplus::Color::Black, &hScaledImage);
 	if (status != Gdiplus::Ok)
@@ -630,7 +635,11 @@ void CRecordDlg::PlayWindowShowBitmap(HBITMAP_SHARED_PTR bitmap)
 		LOG_ERROR(L"failed to call GetHBITMAP, error is %d", status);
 		return;
 	}
-	m_playWindowCtrl.SetBitmap(hScaledImage);
+	HBITMAP hOldBmp = m_playWindowCtrl.SetBitmap(hScaledImage);
+	if (hOldBmp != NULL)
+	{
+		DeleteObject(hOldBmp);
+	}
 }
 
 void CRecordDlg::PlayWindowScaleBitmap(HBITMAP_SHARED_PTR bitmap, float scaleFactor)
@@ -706,15 +715,16 @@ void CRecordDlg::PlayWindowMoveBitmap(CPoint centerPos)
 	}
 
 	// 裁剪图片
-	Gdiplus::Bitmap cropImage(cropRect.Width(), cropRect.Height(), m_playImage.m_image->GetPixelFormat());
+	CRect ctrlRect;
+	m_playWindowCtrl.GetClientRect(&ctrlRect);
+	Gdiplus::Bitmap cropImage(ctrlRect.Width(), ctrlRect.Height(), m_playImage.m_image->GetPixelFormat());
 	Gdiplus::Graphics graphics(&cropImage);
-	graphics.DrawImage(m_playImage.m_image, cropRect.left, cropRect.top, cropRect.Width(), cropRect.Height());
-
-	if (m_playWindowCtrl.GetBitmap() != NULL)
-	{
-		DeleteObject(m_playWindowCtrl.GetBitmap());
-		m_playWindowCtrl.SetBitmap(NULL);
-	}
+	Gdiplus::SolidBrush blackBrush(Gdiplus::Color::Black);
+	graphics.FillRectangle(&blackBrush, 0, 0, cropImage.GetWidth(), cropImage.GetHeight());
+	graphics.DrawImage(m_playImage.m_image, 
+		(int)(cropImage.GetWidth()- cropRect.Width())/2,
+		(int)(cropImage.GetHeight() - cropRect.Height()) / 2,
+		cropRect.left, cropRect.top, cropRect.Width(), cropRect.Height(), Gdiplus::UnitPixel);
 
 	HBITMAP hCropImage = NULL;
 	Gdiplus::Status status = cropImage.GetHBITMAP(Gdiplus::Color::Black, &hCropImage);
@@ -723,7 +733,16 @@ void CRecordDlg::PlayWindowMoveBitmap(CPoint centerPos)
 		LOG_ERROR(L"failed to call GetHBITMAP, error is %d", status);
 		return;
 	}
-	m_playWindowCtrl.SetBitmap(hCropImage);
+
+	HBITMAP hOldBmp = m_playWindowCtrl.SetBitmap(hCropImage);
+	if (hOldBmp != NULL)
+	{
+		DeleteObject(hOldBmp);
+	}
+	if (m_playWindowCtrl.GetBitmap() != hCropImage)
+	{
+		DeleteObject(hCropImage);
+	}
 }
 
 BOOL CRecordDlg::PreTranslateMessage(MSG* pMsg)
@@ -837,12 +856,12 @@ void CRecordDlg::OnBnClickedOpenCaptureWindowCtrl()
 		}
 	}
 
-	MessageBox(L"在图窗上按Enter键保存设置，按ESC键退出不保存", L"提示", MB_OK);
+	MessageBox(L"在图窗上按Enter键保存设置，按ESC键退出", L"提示", MB_OK);
 
-	CCaptureSizeDlg* dlg = new CCaptureSizeDlg(this);
+	CCaptureSizeDlg* dlg = new CCaptureSizeDlg(NULL);
 	dlg->SetAutoDestroy();
 	dlg->SetScreenOrgin(screenTopLeft);
-	dlg->Create(IDD_SETTING_CAPTURE_SIZE, this);
+	dlg->Create(IDD_SETTING_CAPTURE_SIZE, NULL);
 	CRect captureRect = CSettingManager::GetInstance()->GetCaptureRect();
 	captureRect.OffsetRect(screenTopLeft);
 	dlg->SetWindowPos(&CWnd::wndTopMost, captureRect.left, captureRect.top, 
@@ -1051,6 +1070,21 @@ void CRecordDlg::PlayByFrame(bool nextFrame)
 	PlayWindowShowBitmap(m_playFrames[m_currentPlayFrameIndex]);
 }
 
+bool CRecordDlg::IsPlayFinish()
+{
+	if (m_reverseCtrl.GetCheck() == BST_CHECKED && m_currentPlayFrameIndex <= 0)
+	{
+		return true;
+	}
+
+	if (m_reverseCtrl.GetCheck() != BST_CHECKED && m_currentPlayFrameIndex >= (int)m_playFrames.size() - 1)
+	{
+		return true;
+	}
+
+	return false;
+}
+
 void CRecordDlg::ScalePlayingImage(short delta)
 {
 	if (m_playImage.m_image == nullptr)
@@ -1110,6 +1144,10 @@ void CRecordDlg::OnTimer(UINT_PTR nIDEvent)
 	if (nIDEvent == PLAY_TIMER_ID)
 	{
 		PlayByFrame(true);
+		if (IsPlayFinish())
+		{
+			StopPlay();
+		}
 		return;
 	}
 	else if (nIDEvent == REFRESH_SCREEN_CTRL_TIMER_ID)
