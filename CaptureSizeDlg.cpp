@@ -59,6 +59,8 @@ BOOL CCaptureSizeDlg::OnInitDialog()
 
 void CCaptureSizeDlg::OnDestroy()
 {
+	GetParent()->ShowWindow(SW_SHOW);
+
 	CDialogEx::OnDestroy();
 	
 	if (m_bAutoDestroy)

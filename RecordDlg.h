@@ -100,7 +100,7 @@ private:
 	void RefreshPlayContentCtrl();
 
 	// 按下快捷键
-	void OnKeyDown(wchar_t ch);
+	bool OnKeyDown(wchar_t ch);
 
 	// 在某个控件上单击，如果消息已处理返回true
 	bool OnLButtonDown(HWND hWnd);
@@ -181,7 +181,7 @@ public:
 	afx_msg void OnBnClickedOpenCaptureWindowCtrl();
 	afx_msg void OnBnClickedClearCacheCtrl();
 	afx_msg void OnEnUpdateRowCountCtrl();
-	afx_msg void OnEnChangeColumnCountCtrl();
+//	afx_msg void OnEnChangeColumnCountCtrl();
 	afx_msg void OnEnUpdateFrontCountCtrl();
 	afx_msg void OnEnUpdateBackCountCtrl();
 	afx_msg void OnBnClickedPlayCtrl();
@@ -190,4 +190,5 @@ public:
 	afx_msg void OnBnClickedFetchImageCtrl();
 	afx_msg void OnMouseHWheel(UINT nFlags, short zDelta, CPoint pt);
 	afx_msg void OnStnClickedPlayWindowCtrl();
+	afx_msg void OnUpdateColumnCountCtrl();
 };

@@ -108,7 +108,7 @@ BEGIN_MESSAGE_MAP(CRecordDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_OPEN_CAPTURE_WINDOW_CTRL, &CRecordDlg::OnBnClickedOpenCaptureWindowCtrl)
 	ON_BN_CLICKED(IDC_CLEAR_CACHE_CTRL, &CRecordDlg::OnBnClickedClearCacheCtrl)
 	ON_EN_UPDATE(IDC_ROW_COUNT_CTRL, &CRecordDlg::OnEnUpdateRowCountCtrl)
-	ON_EN_CHANGE(IDC_COLUMN_COUNT_CTRL, &CRecordDlg::OnEnChangeColumnCountCtrl)
+//	ON_EN_CHANGE(IDC_COLUMN_COUNT_CTRL, &CRecordDlg::OnEnChangeColumnCountCtrl)
 	ON_EN_UPDATE(IDC_FRONT_COUNT_CTRL, &CRecordDlg::OnEnUpdateFrontCountCtrl)
 	ON_EN_UPDATE(IDC_BACK_COUNT_CTRL, &CRecordDlg::OnEnUpdateBackCountCtrl)
 	ON_BN_CLICKED(IDC_PLAY_CTRL, &CRecordDlg::OnBnClickedPlayCtrl)
@@ -117,6 +117,7 @@ BEGIN_MESSAGE_MAP(CRecordDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_FETCH_IMAGE_CTRL, &CRecordDlg::OnBnClickedFetchImageCtrl)
 	ON_WM_MOUSEHWHEEL()
 	ON_STN_CLICKED(IDC_PLAY_WINDOW_CTRL, &CRecordDlg::OnStnClickedPlayWindowCtrl)
+	ON_EN_UPDATE(IDC_COLUMN_COUNT_CTRL, &CRecordDlg::OnUpdateColumnCountCtrl)
 END_MESSAGE_MAP()
 
 
@@ -380,18 +381,22 @@ void CRecordDlg::RefreshPlayContentCtrl()
 	CString format = L"选中的播放内容：%s%d";
 	if (m_playContent.m_contentType == CONTENT_TYPE_CACHE)
 	{
-		content.Format(format, L"缓存", m_playContent.m_index);
+		content.Format(format, L"缓存", m_playContent.m_index+1);
 	}
 	else if (m_playContent.m_contentType == CONTENT_TYPE_CAPTURE)
 	{
-		content.Format(format, L"定格抓拍", m_playContent.m_index);
+		content.Format(format, L"定格抓拍", m_playContent.m_index+1);
 	}
 	m_playContentCtrl.SetWindowText(content);
 }
 
-void CRecordDlg::OnKeyDown(wchar_t ch)
+bool CRecordDlg::OnKeyDown(wchar_t ch)
 {
-	if (ch == L'Z')
+	if (ch == VK_RETURN)
+	{
+		return true;
+	}
+	else if (ch == L'Z')
 	{
 		// 缓存按键
 		if (CDataManager::Get()->IsCaching())
@@ -403,28 +408,32 @@ void CRecordDlg::OnKeyDown(wchar_t ch)
 			if (!CDataManager::Get()->canSave())
 			{
 				MessageBox(L"可用内存较低，请先清空数据。", L"提示", MB_OK);
-				return;
+				return true;
 			}
 
 			CDataManager::Get()->CacheScreen(true);
 		}
 		RefreshCacheCtrls();
+		return true;
 	}
 	else if (ch == L' ')
 	{
 		// 空格键定格截图
 		OnBnClickedCaptureCtrl();
+		return true;
 	}
 	else if (ch == L'C')
 	{
 		// 清空抓拍
 		ClearCacheAndCapture(false, true);
+		return true;
 	}
 	else if (ch == L'M')
 	{
 		// 重新开始播放
 		StopPlay();
 		OnBnClickedPlayCtrl();
+		return true;
 	}
 	else if (ch == VK_LEFT)
 	{
@@ -439,6 +448,7 @@ void CRecordDlg::OnKeyDown(wchar_t ch)
 				SelectPlayContent(CONTENT_TYPE_CAPTURE, m_playContent.m_index - 1);
 			}
 		}
+		return true;
 	}
 	else if (ch == VK_RIGHT)
 	{
@@ -453,23 +463,30 @@ void CRecordDlg::OnKeyDown(wchar_t ch)
 				SelectPlayContent(CONTENT_TYPE_CAPTURE, m_playContent.m_index + 1);
 			}
 		}
+		return true;
 	}
 	else if (ch == VK_UP)
 	{
 		PlayByFrame(false);
+		return true;
 	}
 	else if (ch == VK_DOWN)
 	{
 		PlayByFrame(true);
+		return true;
 	}
 	else if (ch == L'B')
 	{
 		OnBnClickedPlayCtrl();
+		return true;
 	}
 	else if (ch == L'N')
 	{
 		StopPlay();
+		return true;
 	}
+
+	return false;
 }
 
 bool CRecordDlg::OnLButtonDown(HWND hWnd)
@@ -507,7 +524,7 @@ void CRecordDlg::ChangeCaptureCount()
 	{
 		SelectPlayContent(CONTENT_TYPE_CAPTURE, 0);
 	}
-	RefreshGrids();
+	InitGrids(CSettingManager::GetInstance()->GetRowCount(), CSettingManager::GetInstance()->GetColumnCount());
 }
 
 void CRecordDlg::SetPlayTimer()
@@ -628,6 +645,12 @@ void CRecordDlg::PlayWindowShowBitmap(HBITMAP_SHARED_PTR bitmap)
 	m_playImage.m_cropHeight = displayHeight;
 	m_playImage.m_centerPos = CPoint(displayWidth/2, displayHeight/2);
 
+	if (m_playWindowCtrl.GetBitmap() != NULL)
+	{
+		DeleteObject(m_playWindowCtrl.GetBitmap());
+		m_playWindowCtrl.SetBitmap(NULL);
+	}
+
 	HBITMAP hScaledImage = NULL;
 	Gdiplus::Status status = scaledImage.GetHBITMAP(Gdiplus::Color::Black, &hScaledImage);
 	if (status != Gdiplus::Ok)
@@ -635,10 +658,15 @@ void CRecordDlg::PlayWindowShowBitmap(HBITMAP_SHARED_PTR bitmap)
 		LOG_ERROR(L"failed to call GetHBITMAP, error is %d", status);
 		return;
 	}
+
 	HBITMAP hOldBmp = m_playWindowCtrl.SetBitmap(hScaledImage);
 	if (hOldBmp != NULL)
 	{
 		DeleteObject(hOldBmp);
+	}
+	if (m_playWindowCtrl.GetBitmap() != hScaledImage)
+	{
+		DeleteObject(hScaledImage);
 	}
 }
 
@@ -715,16 +743,15 @@ void CRecordDlg::PlayWindowMoveBitmap(CPoint centerPos)
 	}
 
 	// 裁剪图片
-	CRect ctrlRect;
-	m_playWindowCtrl.GetClientRect(&ctrlRect);
-	Gdiplus::Bitmap cropImage(ctrlRect.Width(), ctrlRect.Height(), m_playImage.m_image->GetPixelFormat());
+	Gdiplus::Bitmap cropImage(cropRect.Width(), cropRect.Height(), m_playImage.m_image->GetPixelFormat());
 	Gdiplus::Graphics graphics(&cropImage);
-	Gdiplus::SolidBrush blackBrush(Gdiplus::Color::Black);
-	graphics.FillRectangle(&blackBrush, 0, 0, cropImage.GetWidth(), cropImage.GetHeight());
-	graphics.DrawImage(m_playImage.m_image, 
-		(int)(cropImage.GetWidth()- cropRect.Width())/2,
-		(int)(cropImage.GetHeight() - cropRect.Height()) / 2,
-		cropRect.left, cropRect.top, cropRect.Width(), cropRect.Height(), Gdiplus::UnitPixel);
+	graphics.DrawImage(m_playImage.m_image, cropRect.left, cropRect.top, cropRect.Width(), cropRect.Height());
+
+	if (m_playWindowCtrl.GetBitmap() != NULL)
+	{
+		DeleteObject(m_playWindowCtrl.GetBitmap());
+		m_playWindowCtrl.SetBitmap(NULL);
+	}
 
 	HBITMAP hCropImage = NULL;
 	Gdiplus::Status status = cropImage.GetHBITMAP(Gdiplus::Color::Black, &hCropImage);
@@ -747,19 +774,16 @@ void CRecordDlg::PlayWindowMoveBitmap(CPoint centerPos)
 
 BOOL CRecordDlg::PreTranslateMessage(MSG* pMsg)
 {
-	if (pMsg->message == WM_KEYDOWN && pMsg->wParam == VK_RETURN)
+	if (pMsg->message == WM_KEYDOWN)
 	{
-		// Ignore the Enter key event
-		return TRUE;
+		if (OnKeyDown(pMsg->wParam))
+		{
+			return TRUE;
+		}
 	}
 	else if (pMsg->message == WM_SHOW_MAX)
 	{
 		SendMessage(WM_SYSCOMMAND, SC_MAXIMIZE, 0);
-		return TRUE;
-	}
-	else if (pMsg->message == WM_KEYDOWN)
-	{
-		OnKeyDown(pMsg->wParam);
 		return TRUE;
 	}
 	else if (pMsg->message == WM_LBUTTONDOWN)
@@ -858,7 +882,7 @@ void CRecordDlg::OnBnClickedOpenCaptureWindowCtrl()
 
 	MessageBox(L"在图窗上按Enter键保存设置，按ESC键退出", L"提示", MB_OK);
 
-	CCaptureSizeDlg* dlg = new CCaptureSizeDlg(NULL);
+	CCaptureSizeDlg* dlg = new CCaptureSizeDlg(this);
 	dlg->SetAutoDestroy();
 	dlg->SetScreenOrgin(screenTopLeft);
 	dlg->Create(IDD_SETTING_CAPTURE_SIZE, NULL);
@@ -866,6 +890,9 @@ void CRecordDlg::OnBnClickedOpenCaptureWindowCtrl()
 	captureRect.OffsetRect(screenTopLeft);
 	dlg->SetWindowPos(&CWnd::wndTopMost, captureRect.left, captureRect.top, 
 		captureRect.Width(), captureRect.Height(), SWP_SHOWWINDOW);
+
+	// 隐藏主窗口
+	ShowWindow(SW_HIDE);
 }
 
 void CRecordDlg::OnBnClickedClearCacheCtrl()
@@ -878,6 +905,11 @@ void CRecordDlg::OnEnUpdateRowCountCtrl()
 {
 	CString rowCountString;
 	m_rowCountCtrl.GetWindowText(rowCountString);
+	if (rowCountString.IsEmpty())
+	{
+		return;
+	}
+
 	int rowCountInt = std::stoi((LPCWSTR)rowCountString);
 	if (rowCountInt < 1 || rowCountInt > 4)
 	{
@@ -890,26 +922,30 @@ void CRecordDlg::OnEnUpdateRowCountCtrl()
 }
 
 
-void CRecordDlg::OnEnChangeColumnCountCtrl()
-{
-	CString columnCountString;
-	m_columnCountCtrl.GetWindowText(columnCountString);
-	int columnCountInt = std::stoi((LPCWSTR)columnCountString);
-	if (columnCountInt < 1 || columnCountInt > 4)
-	{
-		MessageBox(L"定格列数只能在1-4", L"提示", MB_OK);
-		return;
-	}
-
-	CSettingManager::GetInstance()->SetColumnCount(columnCountInt);
-	ChangeCaptureCount();
-}
+//void CRecordDlg::OnEnChangeColumnCountCtrl()
+//{
+//	CString columnCountString;
+//	m_columnCountCtrl.GetWindowText(columnCountString);
+//	int columnCountInt = std::stoi((LPCWSTR)columnCountString);
+//	if (columnCountInt < 1 || columnCountInt > 4)
+//	{
+//		MessageBox(L"定格列数只能在1-4", L"提示", MB_OK);
+//		return;
+//	}
+//
+//	CSettingManager::GetInstance()->SetColumnCount(columnCountInt);
+//	ChangeCaptureCount();
+//}
 
 
 void CRecordDlg::OnEnUpdateFrontCountCtrl()
 {
 	CString frontCountString;
 	m_frontCountCtrl.GetWindowText(frontCountString);
+	if (frontCountString.IsEmpty())
+	{
+		return;
+	}
 	int frontCountInt = std::stoi((LPCWSTR)frontCountString);
 	if (frontCountInt < 1 || frontCountInt > 120)
 	{
@@ -926,6 +962,11 @@ void CRecordDlg::OnEnUpdateBackCountCtrl()
 {
 	CString backCountString;
 	m_backCountCtrl.GetWindowText(backCountString);
+	if (backCountString.IsEmpty())
+	{
+		return;
+	}
+
 	int backCountInt = std::stoi((LPCWSTR)backCountString);
 	if (backCountInt < 1 || backCountInt > 120)
 	{
@@ -1018,14 +1059,13 @@ void CRecordDlg::SelectPlayContent(int type, int index)
 
 	// 初始化控件的状态
 	RefreshPlayContentCtrl();	
-	m_playProgressCtrl.SetRange(0, m_playFrames.size());
-	m_currentPlayFrameIndex = 0;	
-	m_playProgressCtrl.SetPos(0);
+	m_playProgressCtrl.SetRange(0, m_playFrames.size()-1);
+	m_currentPlayFrameIndex = 0;		
 	if (m_reverseCtrl.GetCheck() == BST_CHECKED)
 	{
 		m_currentPlayFrameIndex = m_playFrames.size() - 1;
-		m_playProgressCtrl.SetPos(m_playFrames.size());
 	}
+	m_playProgressCtrl.SetPos(m_currentPlayFrameIndex);
 	PlayWindowShowBitmap(m_playFrames[m_currentPlayFrameIndex]);
 }
 
@@ -1225,4 +1265,25 @@ void CRecordDlg::OnStnClickedPlayWindowCtrl()
 		m_movingPlayingImage = true;
 		GetCursorPos(&m_mousePos);
 	}
+}
+
+
+void CRecordDlg::OnUpdateColumnCountCtrl()
+{
+	CString columnCountString;
+	m_columnCountCtrl.GetWindowText(columnCountString);
+	if (columnCountString.IsEmpty())
+	{
+		return;
+	}
+
+	int columnCountInt = std::stoi((LPCWSTR)columnCountString);
+	if (columnCountInt < 1 || columnCountInt > 4)
+	{
+		MessageBox(L"定格列数只能在1-4", L"提示", MB_OK);
+		return;
+	}
+
+	CSettingManager::GetInstance()->SetColumnCount(columnCountInt);
+	ChangeCaptureCount();
 }
