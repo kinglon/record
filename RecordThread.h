@@ -9,6 +9,8 @@ protected:
 	virtual ~CRecordThread();
 
 public:
+	static bool IsRecording() { return m_recording; }
+
 	static void StartRecord();
 
 	static void SetCaptureRect(CRect captureRect);
@@ -17,6 +19,8 @@ private:
 	void CaptureScreen();
 
 private:
+	static bool m_recording;
+
 	static bool m_captrueRectChange;
 
 	static CRect s_captureRect;

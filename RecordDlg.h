@@ -109,7 +109,7 @@ private:
 
 	void SetPlayTimer();
 
-	void StopPlay();
+	void StopPlay(bool complete);
 
 	// 清空定格抓拍和缓存
 	void ClearCacheAndCapture(bool cache, bool capture);
@@ -137,8 +137,6 @@ private:
 
 	// 播放帧
 	std::vector<HBITMAP_SHARED_PTR> m_playFrames;
-
-	int m_currentPlayFrameIndex = 0;
 
 	// 显示在播放窗口中的图片
 	COperatingImage m_playImage;
@@ -191,4 +189,7 @@ public:
 	afx_msg void OnMouseHWheel(UINT nFlags, short zDelta, CPoint pt);
 	afx_msg void OnStnClickedPlayWindowCtrl();
 	afx_msg void OnUpdateColumnCountCtrl();
+	afx_msg void OnBnClickedReverseCtrl();
+	afx_msg void OnTRBNThumbPosChangingPlayProgressCtrl(NMHDR* pNMHDR, LRESULT* pResult);
+	afx_msg BOOL OnMouseWheel(UINT nFlags, short zDelta, CPoint pt);
 };

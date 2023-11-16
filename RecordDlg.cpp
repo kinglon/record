@@ -12,6 +12,7 @@
 #include "CaptureSizeDlg.h"
 #include <atlimage.h>
 #include <ShlObj.h>
+#include "RecordThread.h"
 
 using namespace std;
 
@@ -118,6 +119,9 @@ BEGIN_MESSAGE_MAP(CRecordDlg, CDialogEx)
 	ON_WM_MOUSEHWHEEL()
 	ON_STN_CLICKED(IDC_PLAY_WINDOW_CTRL, &CRecordDlg::OnStnClickedPlayWindowCtrl)
 	ON_EN_UPDATE(IDC_COLUMN_COUNT_CTRL, &CRecordDlg::OnUpdateColumnCountCtrl)
+	ON_BN_CLICKED(IDC_REVERSE_CTRL, &CRecordDlg::OnBnClickedReverseCtrl)
+	ON_NOTIFY(TRBN_THUMBPOSCHANGING, IDC_PLAY_PROGRESS_CTRL, &CRecordDlg::OnTRBNThumbPosChangingPlayProgressCtrl)
+	ON_WM_MOUSEWHEEL()
 END_MESSAGE_MAP()
 
 
@@ -405,6 +409,11 @@ bool CRecordDlg::OnKeyDown(wchar_t ch)
 		}
 		else
 		{
+			if (!CRecordThread::IsRecording())
+			{
+				MessageBox(L"请先开启图窗。", L"提示", MB_OK);
+				return true;
+			}
 			if (!CDataManager::Get()->canSave())
 			{
 				MessageBox(L"可用内存较低，请先清空数据。", L"提示", MB_OK);
@@ -431,7 +440,7 @@ bool CRecordDlg::OnKeyDown(wchar_t ch)
 	else if (ch == L'M')
 	{
 		// 重新开始播放
-		StopPlay();
+		StopPlay(true);
 		OnBnClickedPlayCtrl();
 		return true;
 	}
@@ -482,7 +491,7 @@ bool CRecordDlg::OnKeyDown(wchar_t ch)
 	}
 	else if (ch == L'N')
 	{
-		StopPlay();
+		StopPlay(false);
 		return true;
 	}
 
@@ -530,23 +539,24 @@ void CRecordDlg::ChangeCaptureCount()
 void CRecordDlg::SetPlayTimer()
 {
 	KillTimer(PLAY_TIMER_ID);
-
-	float playSpeedRatio = 1.0f;
+	
+	float percent = 0.5f;
 	if (m_playContent.m_contentType == CONTENT_TYPE_CACHE)
 	{
-		playSpeedRatio = m_playCacheSpeedCtrl.GetPos() * 1.0f / m_playCacheSpeedCtrl.GetRangeMax();
+		percent = m_playCacheSpeedCtrl.GetPos() * 1.0f / m_playCacheSpeedCtrl.GetRangeMax();
 	}
 	else if (m_playContent.m_contentType == CONTENT_TYPE_CAPTURE)
 	{
-		playSpeedRatio = m_playCaptureSpeedCtrl.GetPos() * 1.0f / m_playCaptureSpeedCtrl.GetRangeMax();
+		percent = m_playCaptureSpeedCtrl.GetPos() * 1.0f / m_playCaptureSpeedCtrl.GetRangeMax();
 	}
-	if (playSpeedRatio < 0.1f)
+	if (percent < 0.1f)
 	{
-		playSpeedRatio = 0.1f;
+		percent = 0.1f;
 	}
 
+	float playSpeedMultipler = percent * 2.0f;
 	int playInterval = 1000 / CSettingManager::GetInstance()->GetRecordFrameRate();  // 正常播放速度
-	playInterval = int(playInterval / playSpeedRatio);  // 乘上倍数
+	playInterval = int(playInterval / playSpeedMultipler);  // 乘上倍数
 	SetTimer(PLAY_TIMER_ID, playInterval, nullptr);
 }
 
@@ -745,7 +755,7 @@ void CRecordDlg::PlayWindowMoveBitmap(CPoint centerPos)
 	// 裁剪图片
 	Gdiplus::Bitmap cropImage(cropRect.Width(), cropRect.Height(), m_playImage.m_image->GetPixelFormat());
 	Gdiplus::Graphics graphics(&cropImage);
-	graphics.DrawImage(m_playImage.m_image, cropRect.left, cropRect.top, cropRect.Width(), cropRect.Height());
+	graphics.DrawImage(m_playImage.m_image, 0, 0, cropRect.left, cropRect.top, cropRect.Width(), cropRect.Height(), Gdiplus::UnitPixel);
 
 	if (m_playWindowCtrl.GetBitmap() != NULL)
 	{
@@ -828,6 +838,11 @@ void CRecordDlg::OnSize(UINT nType, int cx, int cy)
 
 void CRecordDlg::OnBnClickedCaptureCtrl()
 {
+	if (!CRecordThread::IsRecording())
+	{
+		MessageBox(L"请先开启图窗。", L"提示", MB_OK);
+		return;
+	}
 	if (!CDataManager::Get()->canSave())
 	{
 		MessageBox(L"可用内存较低，请先清空数据。", L"提示", MB_OK);
@@ -990,18 +1005,33 @@ void CRecordDlg::OnBnClickedPlayCtrl()
 	// 初始化状态	
 	m_playCtrl.EnableWindow(FALSE);
 	m_reverseCtrl.EnableWindow(FALSE);
-	m_stopCtrl.EnableWindow(TRUE);
+	m_stopCtrl.EnableWindow(TRUE);	
 
 	// 设置播放定时器，开始播放
 	SetPlayTimer();
+
+	SetFocus();
 }
 
-void CRecordDlg::StopPlay()
+void CRecordDlg::StopPlay(bool complete)
 {	
 	KillTimer(PLAY_TIMER_ID);
 	m_playCtrl.EnableWindow(TRUE);
-	m_reverseCtrl.EnableWindow(TRUE);
 	m_stopCtrl.EnableWindow(FALSE);
+	if (complete)
+	{				
+		m_reverseCtrl.EnableWindow(TRUE);		
+		m_playProgressCtrl.SetPos(0);
+		if (m_reverseCtrl.GetCheck() == BST_CHECKED)
+		{
+			m_playProgressCtrl.SetPos(m_playFrames.size() - 1);
+		}
+		PlayWindowShowBitmap(m_playFrames[m_playProgressCtrl.GetPos()]);
+	}
+	else
+	{
+		m_reverseCtrl.EnableWindow(FALSE);
+	}
 }
 
 void CRecordDlg::ClearCacheAndCapture(bool cache, bool capture)
@@ -1051,40 +1081,43 @@ void CRecordDlg::SelectPlayContent(int type, int index)
 		return;
 	}
 
-	StopPlay();
+	KillTimer(PLAY_TIMER_ID);
 
 	m_playContent.m_contentType = type;
 	m_playContent.m_index = index;
 	m_playFrames = frames;
 
 	// 初始化控件的状态
-	RefreshPlayContentCtrl();	
-	m_playProgressCtrl.SetRange(0, m_playFrames.size()-1);
-	m_currentPlayFrameIndex = 0;		
+	m_playCtrl.EnableWindow(TRUE);
+	m_stopCtrl.EnableWindow(FALSE);
+	m_reverseCtrl.EnableWindow(TRUE);	
+	RefreshPlayContentCtrl();
+	m_playProgressCtrl.SetRange(0, m_playFrames.size()-1);	
+	m_playProgressCtrl.SetPos(0);
 	if (m_reverseCtrl.GetCheck() == BST_CHECKED)
 	{
-		m_currentPlayFrameIndex = m_playFrames.size() - 1;
+		m_playProgressCtrl.SetPos(m_playFrames.size() - 1);
 	}
-	m_playProgressCtrl.SetPos(m_currentPlayFrameIndex);
-	PlayWindowShowBitmap(m_playFrames[m_currentPlayFrameIndex]);
+	PlayWindowShowBitmap(m_playFrames[m_playProgressCtrl.GetPos()]);
 }
 
 void CRecordDlg::PlayByFrame(bool nextFrame)
 {
+	int currentPlayFrameIndex = m_playProgressCtrl.GetPos();
 	if (nextFrame)
 	{
 		if (m_reverseCtrl.GetCheck() == BST_CHECKED)
 		{
-			if (m_currentPlayFrameIndex > 0)
+			if (currentPlayFrameIndex > 0)
 			{
-				m_currentPlayFrameIndex--;
+				currentPlayFrameIndex--;
 			}
 		}
 		else
 		{
-			if (m_currentPlayFrameIndex < (int)m_playFrames.size() - 1)
+			if (currentPlayFrameIndex < (int)m_playFrames.size() - 1)
 			{
-				m_currentPlayFrameIndex++;
+				currentPlayFrameIndex++;
 			}
 		}
 	}
@@ -1092,32 +1125,35 @@ void CRecordDlg::PlayByFrame(bool nextFrame)
 	{
 		if (m_reverseCtrl.GetCheck() == BST_CHECKED)
 		{
-			if (m_currentPlayFrameIndex < (int)m_playFrames.size() - 1)
+			if (currentPlayFrameIndex < (int)m_playFrames.size() - 1)
 			{
-				m_currentPlayFrameIndex++;
+				currentPlayFrameIndex++;
 			}
 		}
 		else
 		{
-			if (m_currentPlayFrameIndex > 0)
+			if (currentPlayFrameIndex > 0)
 			{
-				m_currentPlayFrameIndex--;
+				currentPlayFrameIndex--;
 			}
 		}
 	}
 
-	m_playProgressCtrl.SetPos(m_currentPlayFrameIndex);
-	PlayWindowShowBitmap(m_playFrames[m_currentPlayFrameIndex]);
+	if (currentPlayFrameIndex != m_playProgressCtrl.GetPos())
+	{
+		m_playProgressCtrl.SetPos(currentPlayFrameIndex);
+		PlayWindowShowBitmap(m_playFrames[currentPlayFrameIndex]);
+	}
 }
 
 bool CRecordDlg::IsPlayFinish()
 {
-	if (m_reverseCtrl.GetCheck() == BST_CHECKED && m_currentPlayFrameIndex <= 0)
+	if (m_reverseCtrl.GetCheck() == BST_CHECKED && m_playProgressCtrl.GetPos() <= 0)
 	{
 		return true;
 	}
 
-	if (m_reverseCtrl.GetCheck() != BST_CHECKED && m_currentPlayFrameIndex >= (int)m_playFrames.size() - 1)
+	if (m_reverseCtrl.GetCheck() != BST_CHECKED && m_playProgressCtrl.GetPos() >= (int)m_playFrames.size() - 1)
 	{
 		return true;
 	}
@@ -1139,9 +1175,10 @@ void CRecordDlg::ScalePlayingImage(short delta)
 		scaleRatio = 1.0f;
 	}
 	
-	if (m_currentPlayFrameIndex >= 0 && m_currentPlayFrameIndex < (int)m_playFrames.size())
+	int currentPlayFrameIndex = m_playProgressCtrl.GetPos();
+	if (currentPlayFrameIndex >= 0 && currentPlayFrameIndex < (int)m_playFrames.size())
 	{
-		PlayWindowScaleBitmap(m_playFrames[m_currentPlayFrameIndex], scaleRatio);
+		PlayWindowScaleBitmap(m_playFrames[currentPlayFrameIndex], scaleRatio);
 	}
 }
 
@@ -1186,7 +1223,7 @@ void CRecordDlg::OnTimer(UINT_PTR nIDEvent)
 		PlayByFrame(true);
 		if (IsPlayFinish())
 		{
-			StopPlay();
+			StopPlay(true);
 		}
 		return;
 	}
@@ -1206,21 +1243,29 @@ void CRecordDlg::OnTimer(UINT_PTR nIDEvent)
 
 void CRecordDlg::OnBnClickedStopCtrl()
 {
-	StopPlay();
+	StopPlay(false);
+	SetFocus();
 }
 
 
 void CRecordDlg::OnBnClickedFetchImageCtrl()
 {
+	if (m_playContent.m_contentType == CONTENT_TYPE_UNKNOWN)
+	{
+		MessageBox(L"先选择播放内容", L"提示", MB_OK);
+		return;
+	}
+
 	CString filter = _T("Jpeg Files (*.jpg)|*.jpg||");
 	CFileDialog dlg(FALSE, _T(".png"), nullptr, OFN_OVERWRITEPROMPT, filter, this);
 	if (dlg.DoModal() == IDOK)
 	{
 		CString filePath = dlg.GetPathName();
-		if (m_currentPlayFrameIndex >= 0 && m_currentPlayFrameIndex < (int)m_playFrames.size())
+		int currentPlayFrameIndex = m_playProgressCtrl.GetPos();
+		if (currentPlayFrameIndex >= 0 && currentPlayFrameIndex < (int)m_playFrames.size())
 		{
 			CImage image;
-			image.Attach(m_playFrames[m_currentPlayFrameIndex].get());
+			image.Attach(m_playFrames[currentPlayFrameIndex].get());
 			HRESULT hr = image.Save(filePath);
 			if (FAILED(hr))
 			{
@@ -1234,37 +1279,18 @@ void CRecordDlg::OnBnClickedFetchImageCtrl()
 
 void CRecordDlg::OnMouseHWheel(UINT nFlags, short zDelta, CPoint pt)
 {
-	if (GetKeyState(VK_MENU) < 0)
-	{
-		// 按ALT键滚动滑轮，缩放播放图片
-		ScalePlayingImage(zDelta);
-	}
-	else
-	{
-		// 没按ALT键滚动滑轮，按张播放前后翻张
-		if (zDelta < 0)
-		{
-			PlayByFrame(false);
-		}
-		else
-		{
-			PlayByFrame(true);
-		}
-
-		return;
-	}
-
 	CDialogEx::OnMouseHWheel(nFlags, zDelta, pt);
 }
 
 
 void CRecordDlg::OnStnClickedPlayWindowCtrl()
 {
+	m_playWindowCtrl.SetFocus();
 	if (GetKeyState(VK_MENU) < 0)  // ALT键按下
 	{
 		m_movingPlayingImage = true;
 		GetCursorPos(&m_mousePos);
-	}
+	}	
 }
 
 
@@ -1286,4 +1312,57 @@ void CRecordDlg::OnUpdateColumnCountCtrl()
 
 	CSettingManager::GetInstance()->SetColumnCount(columnCountInt);
 	ChangeCaptureCount();
+}
+
+
+void CRecordDlg::OnBnClickedReverseCtrl()
+{
+	if (m_playFrames.size() <= 0)
+	{
+		return;
+	}
+	
+	m_playProgressCtrl.SetPos(0);
+	if (m_reverseCtrl.GetCheck() == BST_CHECKED)
+	{
+		m_playProgressCtrl.SetPos(m_playFrames.size() - 1);
+	}
+	PlayWindowShowBitmap(m_playFrames[m_playProgressCtrl.GetPos()]);
+}
+
+
+void CRecordDlg::OnTRBNThumbPosChangingPlayProgressCtrl(NMHDR* pNMHDR, LRESULT* pResult)
+{
+	NMTRBTHUMBPOSCHANGING* pNMTPC = reinterpret_cast<NMTRBTHUMBPOSCHANGING*>(pNMHDR);	
+	*pResult = 0;
+
+	if (m_playFrames.size() > 0)
+	{
+		m_playProgressCtrl.SetPos(pNMTPC->dwPos);
+		PlayByFrame(true);
+	}
+}
+
+
+BOOL CRecordDlg::OnMouseWheel(UINT nFlags, short zDelta, CPoint pt)
+{
+	if (GetKeyState(VK_MENU) < 0)
+	{
+		// 按ALT键滚动滑轮，缩放播放图片
+		ScalePlayingImage(zDelta);
+	}
+	else
+	{
+		// 没按ALT键滚动滑轮，按张播放前后翻张
+		if (zDelta < 0)
+		{
+			PlayByFrame(false);
+		}
+		else
+		{
+			PlayByFrame(true);
+		}
+	}
+
+	return CDialogEx::OnMouseWheel(nFlags, zDelta, pt);
 }

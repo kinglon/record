@@ -9,6 +9,8 @@
 
 IMPLEMENT_DYNCREATE(CRecordThread, CWinThread)
 
+bool CRecordThread::m_recording = false;
+
 bool CRecordThread::m_captrueRectChange = true;
 
 CRect CRecordThread::s_captureRect;
@@ -71,11 +73,10 @@ int CRecordThread::ExitInstance()
 }
 
 void CRecordThread::StartRecord()
-{
-	static bool bFirst = true;
-	if (bFirst)
+{	
+	if (!m_recording)
 	{
-		bFirst = false;
+		m_recording = true;
 		CRecordThread* thread = new CRecordThread();
 		thread->m_bAutoDelete = TRUE;
 		thread->CreateThread();

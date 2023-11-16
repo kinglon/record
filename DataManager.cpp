@@ -75,6 +75,7 @@ void CDataManager::FrameArrive(const HBITMAP_SHARED_PTR& frame)
 		if (GetTickCount64() - m_capturingBeginTime > m_cacheDuration)
 		{
 			m_isCaching = false;
+			LOG_INFO(L"end to cache");
 		}
 	}
 }
@@ -103,7 +104,7 @@ void CDataManager::CaptureScreen()
 	m_captureFrames.push_back(std::vector<HBITMAP_SHARED_PTR>());
 	auto& lastItem = m_captureFrames[m_captureFrames.size() - 1];
 	lastItem.insert(lastItem.begin(), m_recordFrames.begin(), m_recordFrames.end());
-	m_isCapturing = true;
+	m_isCapturing = true;	
 }
 
 void CDataManager::CacheScreen(bool isStart)
@@ -131,6 +132,7 @@ void CDataManager::CacheScreen(bool isStart)
 		m_cacheFrames[m_cacheFrames.size() - 1].push_back(m_recordFrames.back());
 		m_isCaching = true;
 		m_capturingBeginTime = GetTickCount64();
+		LOG_INFO(L"begin to cache");
 	}
 	else
 	{
