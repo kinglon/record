@@ -72,6 +72,9 @@
     <ClInclude Include="CaptureSizeDlg.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="ImageDisplayCtrl.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="record.cpp">
@@ -111,6 +114,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="CaptureSizeDlg.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="ImageDisplayCtrl.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

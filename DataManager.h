@@ -47,6 +47,9 @@ public:
     // 获取所有缓存的封面
     std::vector<HBITMAP_SHARED_PTR> GetCacheCovers();
 
+    // 获取缓存个数
+    int GetCacheCount();
+
     // 获取指定缓存的帧
     std::vector<HBITMAP_SHARED_PTR> GetCacheFrames(int cacheIndex);
 

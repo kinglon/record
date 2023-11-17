@@ -2,6 +2,7 @@
 
 #include <vector>
 #include "DataManager.h"
+#include "ImageDisplayCtrl.h"
 
 #define CONTENT_TYPE_UNKNOWN   0  //还未指定
 #define CONTENT_TYPE_CACHE  1  //缓存
@@ -126,6 +127,10 @@ private:
 
 	void MovePlayingImage();
 
+	void RefreshScreenCtrl(int deltaTime);
+
+	void RefreshPlayWindow(int deltaTime);
+
 private:
 	int m_initSizeX = 0;
 
@@ -140,6 +145,9 @@ private:
 
 	// 显示在播放窗口中的图片
 	COperatingImage m_playImage;
+
+	// 播放间隔，根据播放帧率计算，毫秒
+	int m_playInterval = 0;
 
 	POINT m_mousePos;
 
@@ -158,7 +166,7 @@ protected:
 public:
 	virtual BOOL PreTranslateMessage(MSG* pMsg);
 	afx_msg void OnSize(UINT nType, int cx, int cy);
-	CStatic m_screenCtrl;
+	CImageDisplayCtrl m_screenCtrl;
 	CSliderCtrl m_playCaptureSpeedCtrl;
 	CSliderCtrl m_playCacheSpeedCtrl;
 	CSliderCtrl m_playProgressCtrl;
@@ -167,7 +175,7 @@ public:
 	CButton m_reverseCtrl;
 	CButton m_fetchImageCtrl;
 	CStatic m_playContentCtrl;
-	CStatic m_playWindowCtrl;
+	CImageDisplayCtrl m_playWindowCtrl;
 	CStatic m_cache1Ctrl;
 	CStatic m_cache2Ctrl;
 	CEdit m_rowCountCtrl;
@@ -192,4 +200,6 @@ public:
 	afx_msg void OnBnClickedReverseCtrl();
 	afx_msg void OnTRBNThumbPosChangingPlayProgressCtrl(NMHDR* pNMHDR, LRESULT* pResult);
 	afx_msg BOOL OnMouseWheel(UINT nFlags, short zDelta, CPoint pt);
+//	afx_msg void OnNMCustomdrawPlayCacheSpeedCtrl(NMHDR* pNMHDR, LRESULT* pResult);
+	afx_msg void OnThumbposchangingPlayCacheSpeedCtrl(NMHDR* pNMHDR, LRESULT* pResult);
 };

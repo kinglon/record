@@ -83,12 +83,7 @@ void CDataManager::FrameArrive(const HBITMAP_SHARED_PTR& frame)
 void CDataManager::CaptureScreen()
 {
 	CIcrCriticalSection cs(m_csWrap.GetCS());
-	if (m_isCaching || m_isCapturing)
-	{
-		LOG_INFO(L"it is caching or capturing");
-		return;
-	}
-	
+
 	if ((int)m_captureFrames.size() >= m_captureCount)
 	{
 		LOG_INFO(L"can not continue to capture, the count is max.");
@@ -112,12 +107,6 @@ void CDataManager::CacheScreen(bool isStart)
 	CIcrCriticalSection cs(m_csWrap.GetCS());
 	if (isStart)
 	{
-		if (m_isCaching || m_isCapturing)
-		{
-			LOG_INFO(L"it is caching or capturing");
-			return;
-		}
-
 		if (m_recordFrames.size() <= 0)
 		{
 			LOG_INFO(L"not record any frames.");
@@ -191,6 +180,12 @@ std::vector<HBITMAP_SHARED_PTR> CDataManager::GetCacheCovers()
 		}
 	}
 	return covers;
+}
+
+int CDataManager::GetCacheCount()
+{
+	CIcrCriticalSection cs(m_csWrap.GetCS());
+	return (int)m_cacheFrames.size();
 }
 
 std::vector<HBITMAP_SHARED_PTR> CDataManager::GetCacheFrames(int cacheIndex)

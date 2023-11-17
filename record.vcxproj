@@ -198,6 +198,7 @@
     <ClInclude Include="CaptureSizeDlg.h" />
     <ClInclude Include="DataManager.h" />
     <ClInclude Include="framework.h" />
+    <ClInclude Include="ImageDisplayCtrl.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="record.h" />
     <ClInclude Include="RecordDlg.h" />
@@ -216,6 +217,7 @@
   <ItemGroup>
     <ClCompile Include="CaptureSizeDlg.cpp" />
     <ClCompile Include="DataManager.cpp" />
+    <ClCompile Include="ImageDisplayCtrl.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>

@@ -25,7 +25,6 @@ using namespace std;
 
 #define IDC_GRID_BASE 5000
 
-#define PLAY_TIMER_ID 1000
 #define REFRESH_SCREEN_CTRL_TIMER_ID  1001
 
 class CAboutDlg : public CDialogEx
@@ -109,7 +108,6 @@ BEGIN_MESSAGE_MAP(CRecordDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_OPEN_CAPTURE_WINDOW_CTRL, &CRecordDlg::OnBnClickedOpenCaptureWindowCtrl)
 	ON_BN_CLICKED(IDC_CLEAR_CACHE_CTRL, &CRecordDlg::OnBnClickedClearCacheCtrl)
 	ON_EN_UPDATE(IDC_ROW_COUNT_CTRL, &CRecordDlg::OnEnUpdateRowCountCtrl)
-//	ON_EN_CHANGE(IDC_COLUMN_COUNT_CTRL, &CRecordDlg::OnEnChangeColumnCountCtrl)
 	ON_EN_UPDATE(IDC_FRONT_COUNT_CTRL, &CRecordDlg::OnEnUpdateFrontCountCtrl)
 	ON_EN_UPDATE(IDC_BACK_COUNT_CTRL, &CRecordDlg::OnEnUpdateBackCountCtrl)
 	ON_BN_CLICKED(IDC_PLAY_CTRL, &CRecordDlg::OnBnClickedPlayCtrl)
@@ -122,6 +120,7 @@ BEGIN_MESSAGE_MAP(CRecordDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_REVERSE_CTRL, &CRecordDlg::OnBnClickedReverseCtrl)
 	ON_NOTIFY(TRBN_THUMBPOSCHANGING, IDC_PLAY_PROGRESS_CTRL, &CRecordDlg::OnTRBNThumbPosChangingPlayProgressCtrl)
 	ON_WM_MOUSEWHEEL()
+	ON_NOTIFY(TRBN_THUMBPOSCHANGING, IDC_PLAY_CACHE_SPEED_CTRL, &CRecordDlg::OnThumbposchangingPlayCacheSpeedCtrl)
 END_MESSAGE_MAP()
 
 
@@ -267,9 +266,8 @@ void CRecordDlg::InitAllCtrl()
 	// 初始化右侧的格子
 	InitGrids(CSettingManager::GetInstance()->GetRowCount(), CSettingManager::GetInstance()->GetColumnCount());
 
-	// 启动屏幕控件刷新窗口
-	int interval = 1000 / CSettingManager::GetInstance()->GetRecordFrameRate();
-	SetTimer(REFRESH_SCREEN_CTRL_TIMER_ID, interval, NULL);
+	// 启动屏幕控件刷新窗口	
+	SetTimer(REFRESH_SCREEN_CTRL_TIMER_ID, 16, NULL);
 }
 
 void CRecordDlg::DestroyGrids()
@@ -484,14 +482,16 @@ bool CRecordDlg::OnKeyDown(wchar_t ch)
 		PlayByFrame(true);
 		return true;
 	}
-	else if (ch == L'B')
+	else if (ch == L'B' || ch == L'N')
 	{
-		OnBnClickedPlayCtrl();
-		return true;
-	}
-	else if (ch == L'N')
-	{
-		StopPlay(false);
+		if (m_playCtrl.IsWindowEnabled())
+		{
+			OnBnClickedPlayCtrl();
+		}
+		else
+		{
+			StopPlay(false);
+		}
 		return true;
 	}
 
@@ -538,8 +538,6 @@ void CRecordDlg::ChangeCaptureCount()
 
 void CRecordDlg::SetPlayTimer()
 {
-	KillTimer(PLAY_TIMER_ID);
-	
 	float percent = 0.5f;
 	if (m_playContent.m_contentType == CONTENT_TYPE_CACHE)
 	{
@@ -556,8 +554,7 @@ void CRecordDlg::SetPlayTimer()
 
 	float playSpeedMultipler = percent * 2.0f;
 	int playInterval = 1000 / CSettingManager::GetInstance()->GetRecordFrameRate();  // 正常播放速度
-	playInterval = int(playInterval / playSpeedMultipler);  // 乘上倍数
-	SetTimer(PLAY_TIMER_ID, playInterval, nullptr);
+	m_playInterval = int(playInterval / playSpeedMultipler);  // 乘上倍数	
 }
 
 void CRecordDlg::CtrlShowBitmap(CStatic* ctrl, HBITMAP_SHARED_PTR bitmap)
@@ -926,9 +923,9 @@ void CRecordDlg::OnEnUpdateRowCountCtrl()
 	}
 
 	int rowCountInt = std::stoi((LPCWSTR)rowCountString);
-	if (rowCountInt < 1 || rowCountInt > 4)
+	if (rowCountInt < 1 || rowCountInt > 15)
 	{
-		MessageBox(L"定格行数只能在1-4", L"提示", MB_OK);
+		MessageBox(L"定格行数只能在1-15", L"提示", MB_OK);
 		return;
 	}
 
@@ -996,11 +993,19 @@ void CRecordDlg::OnEnUpdateBackCountCtrl()
 
 void CRecordDlg::OnBnClickedPlayCtrl()
 {
-	if (m_playContent.m_contentType == CONTENT_TYPE_UNKNOWN)
+	if (m_playContent.m_contentType != CONTENT_TYPE_CACHE)
 	{
-		MessageBox(L"先选择播放内容", L"提示", MB_OK);
-		return;
-	}	
+		int count = CDataManager::Get()->GetCacheCount();
+		if (count == 0)
+		{
+			MessageBox(L"没有缓存可以播放", L"提示", MB_OK);
+			return;
+		}
+		else
+		{
+			SelectPlayContent(CONTENT_TYPE_CACHE, count - 1);
+		}
+	}
 
 	// 初始化状态	
 	m_playCtrl.EnableWindow(FALSE);
@@ -1015,7 +1020,7 @@ void CRecordDlg::OnBnClickedPlayCtrl()
 
 void CRecordDlg::StopPlay(bool complete)
 {	
-	KillTimer(PLAY_TIMER_ID);
+	m_playInterval = 0;
 	m_playCtrl.EnableWindow(TRUE);
 	m_stopCtrl.EnableWindow(FALSE);
 	if (complete)
@@ -1081,7 +1086,7 @@ void CRecordDlg::SelectPlayContent(int type, int index)
 		return;
 	}
 
-	KillTimer(PLAY_TIMER_ID);
+	m_playInterval = 0;
 
 	m_playContent.m_contentType = type;
 	m_playContent.m_index = index;
@@ -1092,11 +1097,20 @@ void CRecordDlg::SelectPlayContent(int type, int index)
 	m_stopCtrl.EnableWindow(FALSE);
 	m_reverseCtrl.EnableWindow(TRUE);	
 	RefreshPlayContentCtrl();
-	m_playProgressCtrl.SetRange(0, m_playFrames.size()-1);	
-	m_playProgressCtrl.SetPos(0);
-	if (m_reverseCtrl.GetCheck() == BST_CHECKED)
+
+	m_playProgressCtrl.SetRange(0, m_playFrames.size() - 1);
+	if (m_playContent.m_contentType == CONTENT_TYPE_CACHE)
+	{		
+		m_playProgressCtrl.SetPos(0);
+		if (m_reverseCtrl.GetCheck() == BST_CHECKED)
+		{
+			m_playProgressCtrl.SetPos(m_playFrames.size() - 1);
+		}
+	}
+	else
 	{
-		m_playProgressCtrl.SetPos(m_playFrames.size() - 1);
+		int frontCount = CSettingManager::GetInstance()->GetFrontCount();
+		m_playProgressCtrl.SetPos(min(frontCount-1, (int)m_playFrames.size()-1));	
 	}
 	PlayWindowShowBitmap(m_playFrames[m_playProgressCtrl.GetPos()]);
 }
@@ -1218,28 +1232,54 @@ void CRecordDlg::MovePlayingImage()
 
 void CRecordDlg::OnTimer(UINT_PTR nIDEvent)
 {
-	if (nIDEvent == PLAY_TIMER_ID)
+	if (nIDEvent == REFRESH_SCREEN_CTRL_TIMER_ID)
 	{
-		PlayByFrame(true);
-		if (IsPlayFinish())
-		{
-			StopPlay(true);
-		}
-		return;
-	}
-	else if (nIDEvent == REFRESH_SCREEN_CTRL_TIMER_ID)
-	{
-		HBITMAP_SHARED_PTR frame = CDataManager::Get()->GetLatestRecordFrame();
-		if (frame.get() != NULL)
-		{
-			CtrlShowBitmap(&m_screenCtrl, frame);
-		}
-		return;
+		static ULONGLONG lastTick = GetTickCount64();
+		ULONGLONG nowTick = GetTickCount64();
+		int deltaTime = (int)(nowTick - lastTick);
+		RefreshScreenCtrl(deltaTime);
+		RefreshPlayWindow(deltaTime);
+		lastTick = nowTick;
 	}
 
 	CDialogEx::OnTimer(nIDEvent);
 }
 
+void CRecordDlg::RefreshPlayWindow(int deltaTime)
+{
+	if (m_playInterval == 0)
+	{
+		return;
+	}
+
+	static int totalDelta = 0;
+	totalDelta += deltaTime;
+	if (totalDelta >= m_playInterval)
+	{		
+		totalDelta -= m_playInterval;
+		PlayByFrame(true);
+		if (IsPlayFinish())
+		{
+			StopPlay(true);
+		}
+	}
+}
+
+void CRecordDlg::RefreshScreenCtrl(int deltaTime)
+{
+	static int refreshInterval = 1000 / CSettingManager::GetInstance()->GetRecordFrameRate();
+	static int totalDelta = 0;
+	totalDelta += deltaTime;
+	if (totalDelta >= refreshInterval)
+	{
+		totalDelta -= refreshInterval;
+		HBITMAP_SHARED_PTR frame = CDataManager::Get()->GetLatestRecordFrame();
+		if (frame.get() != NULL)
+		{
+			CtrlShowBitmap(&m_screenCtrl, frame);
+		}
+	}	
+}
 
 void CRecordDlg::OnBnClickedStopCtrl()
 {
@@ -1304,9 +1344,9 @@ void CRecordDlg::OnUpdateColumnCountCtrl()
 	}
 
 	int columnCountInt = std::stoi((LPCWSTR)columnCountString);
-	if (columnCountInt < 1 || columnCountInt > 4)
+	if (columnCountInt < 1 || columnCountInt > 15)
 	{
-		MessageBox(L"定格列数只能在1-4", L"提示", MB_OK);
+		MessageBox(L"定格列数只能在1-15", L"提示", MB_OK);
 		return;
 	}
 
@@ -1365,4 +1405,16 @@ BOOL CRecordDlg::OnMouseWheel(UINT nFlags, short zDelta, CPoint pt)
 	}
 
 	return CDialogEx::OnMouseWheel(nFlags, zDelta, pt);
+}
+
+void CRecordDlg::OnThumbposchangingPlayCacheSpeedCtrl(NMHDR* pNMHDR, LRESULT* pResult)
+{
+	NMTRBTHUMBPOSCHANGING* pNMTPC = reinterpret_cast<NMTRBTHUMBPOSCHANGING*>(pNMHDR);	
+	*pResult = 0;
+
+	if (!m_playCtrl.IsWindowEnabled())  // 正在播放中
+	{
+		m_playCacheSpeedCtrl.SetPos(pNMTPC->dwPos);
+		SetPlayTimer();
+	}
 }
