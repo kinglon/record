@@ -432,7 +432,7 @@ bool CRecordDlg::OnKeyDown(wchar_t ch)
 	else if (ch == L'C')
 	{
 		// 清空抓拍
-		ClearCacheAndCapture(false, true);
+		ClearCacheAndCapture(true, true);
 		return true;
 	}
 	else if (ch == L'M')
@@ -1109,8 +1109,8 @@ void CRecordDlg::SelectPlayContent(int type, int index)
 	}
 	else
 	{
-		int frontCount = CSettingManager::GetInstance()->GetFrontCount();
-		m_playProgressCtrl.SetPos(min(frontCount-1, (int)m_playFrames.size()-1));	
+		int coverIndex = CDataManager::Get()->GetCaptureCoverIndex(index);
+		m_playProgressCtrl.SetPos(min(coverIndex, (int)m_playFrames.size()-1));
 	}
 	PlayWindowShowBitmap(m_playFrames[m_playProgressCtrl.GetPos()]);
 }
@@ -1256,6 +1256,7 @@ void CRecordDlg::RefreshPlayWindow(int deltaTime)
 	totalDelta += deltaTime;
 	if (totalDelta >= m_playInterval)
 	{		
+		LOG_DEBUG(L"refresh the playing window");
 		totalDelta -= m_playInterval;
 		PlayByFrame(true);
 		if (IsPlayFinish())
@@ -1393,14 +1394,24 @@ BOOL CRecordDlg::OnMouseWheel(UINT nFlags, short zDelta, CPoint pt)
 	}
 	else
 	{
-		// 没按ALT键滚动滑轮，按张播放前后翻张
-		if (zDelta < 0)
+		if (m_playContent.m_contentType != CONTENT_TYPE_UNKNOWN)
 		{
-			PlayByFrame(false);
-		}
-		else
-		{
-			PlayByFrame(true);
+			// 没按ALT键滚动滑轮，按张播放前后翻张
+			if (zDelta < 0)
+			{
+				PlayByFrame(false);
+			}
+			else
+			{
+				PlayByFrame(true);
+			}
+
+			if (m_playContent.m_contentType == CONTENT_TYPE_CAPTURE)
+			{
+				int coverIndex = m_playProgressCtrl.GetPos();
+				CDataManager::Get()->SetCaptureCoverIndex(m_playContent.m_index, coverIndex);
+				CtrlShowBitmap(m_grids[m_playContent.m_index], m_playFrames[coverIndex]);
+			}
 		}
 	}
 
@@ -1414,6 +1425,7 @@ void CRecordDlg::OnThumbposchangingPlayCacheSpeedCtrl(NMHDR* pNMHDR, LRESULT* pR
 
 	if (!m_playCtrl.IsWindowEnabled())  // 正在播放中
 	{
+		LOG_INFO(L"the speed of playing cache is changed to %d", pNMTPC->dwPos);
 		m_playCacheSpeedCtrl.SetPos(pNMTPC->dwPos);
 		SetPlayTimer();
 	}

@@ -44,8 +44,14 @@ public:
     // 获取所有定格抓拍的封面
     std::vector<HBITMAP_SHARED_PTR> GetCaptureCovers();
 
+    // 修改定格封面的索引
+    void SetCaptureCoverIndex(int captureIndex, int coverIndex);
+
+    // 获取指定的定格封面的索引
+    int GetCaptureCoverIndex(int captureIndex);
+
     // 获取所有缓存的封面
-    std::vector<HBITMAP_SHARED_PTR> GetCacheCovers();
+    std::vector<HBITMAP_SHARED_PTR> GetCacheCovers();    
 
     // 获取缓存个数
     int GetCacheCount();
@@ -75,6 +81,9 @@ private:
 
     // 定格抓拍
     std::vector<std::vector<HBITMAP_SHARED_PTR>> m_captureFrames;
+
+    // 定格抓拍封面页
+    std::vector<int> m_captureCovers;
 
     // 缓存
     std::vector<std::vector<HBITMAP_SHARED_PTR>> m_cacheFrames;

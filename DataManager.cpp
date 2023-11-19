@@ -99,6 +99,7 @@ void CDataManager::CaptureScreen()
 	m_captureFrames.push_back(std::vector<HBITMAP_SHARED_PTR>());
 	auto& lastItem = m_captureFrames[m_captureFrames.size() - 1];
 	lastItem.insert(lastItem.begin(), m_recordFrames.begin(), m_recordFrames.end());
+	m_captureCovers.push_back((int)lastItem.size()-1);
 	m_isCapturing = true;	
 }
 
@@ -140,6 +141,7 @@ void CDataManager::ClearCaptureData()
 	CIcrCriticalSection cs(m_csWrap.GetCS());
 	m_isCapturing = false;
 	m_captureFrames.clear();
+	m_captureCovers.clear();
 }
 
 void CDataManager::ClearCacheData()
@@ -153,19 +155,50 @@ std::vector<HBITMAP_SHARED_PTR> CDataManager::GetCaptureCovers()
 {
 	CIcrCriticalSection cs(m_csWrap.GetCS());
 	std::vector<HBITMAP_SHARED_PTR> covers;
-	for (auto& item : m_captureFrames)
+	for (int i=0; i<(int)m_captureFrames.size(); i++)
 	{
-		if (m_frontCount <= (int)item.size())
+		int coverIndex = m_captureCovers[i];
+		if (coverIndex < (int)m_captureFrames[i].size())
 		{
-			covers.push_back(item[m_frontCount -1]);
+			covers.push_back(m_captureFrames[i][coverIndex]);
 		}
-		else if (item.size() > 0)
+		else
 		{
-			covers.push_back(item[item.size()-1]);
+			int last = (int)m_captureFrames[i].size() - 1;
+			covers.push_back(m_captureFrames[i][last]);
 		}
 	}
 
 	return covers;
+}
+
+void CDataManager::SetCaptureCoverIndex(int captureIndex, int coverIndex)
+{
+	CIcrCriticalSection cs(m_csWrap.GetCS());
+
+	if (captureIndex >= (int)m_captureFrames.size() || captureIndex >= (int)m_captureCovers.size())
+	{
+		return;
+	}
+
+	if (coverIndex >= (int)m_captureFrames[captureIndex].size())
+	{
+		return;
+	}
+
+	m_captureCovers[captureIndex] = coverIndex;
+}
+
+int CDataManager::GetCaptureCoverIndex(int captureIndex)
+{
+	CIcrCriticalSection cs(m_csWrap.GetCS());
+
+	if (captureIndex < (int)m_captureCovers.size())
+	{
+		return m_captureCovers[captureIndex];
+	}
+
+	return 0;
 }
 
 std::vector<HBITMAP_SHARED_PTR> CDataManager::GetCacheCovers()
@@ -229,6 +262,11 @@ void CDataManager::SetCaptureCount(int captureCount)
 	{
 		m_captureFrames.erase(m_captureFrames.begin(), 
 			m_captureFrames.begin() + m_captureFrames.size() - captureCount);
+	}
+	if ((int)m_captureCovers.size() > captureCount)
+	{
+		m_captureCovers.erase(m_captureCovers.begin(),
+			m_captureCovers.begin() + m_captureCovers.size() - captureCount);
 	}
 }
 
