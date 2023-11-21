@@ -96,6 +96,7 @@ void CRecordDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_COLUMN_COUNT_CTRL, m_columnCountCtrl);
 	DDX_Control(pDX, IDC_FRONT_COUNT_CTRL, m_frontCountCtrl);
 	DDX_Control(pDX, IDC_BACK_COUNT_CTRL, m_backCountCtrl);
+	DDX_Control(pDX, IDC_CACHE_STATUS, m_cacheStatusCtrl);
 }
 
 BEGIN_MESSAGE_MAP(CRecordDlg, CDialogEx)
@@ -159,8 +160,10 @@ BOOL CRecordDlg::OnInitDialog()
 	GetWindowRect(&wndRect);
 	m_initSizeX = wndRect.Width();
 	m_initSizeY = wndRect.Height();
-
 	PostMessage(WM_SHOW_MAX);
+
+	m_screenImageHandler.CreateThread();
+	m_playImageHandler.CreateThread();
 
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
@@ -243,6 +246,7 @@ void CRecordDlg::InitAllCtrl()
 	CtrlAddSize(&m_playWindowCtrl, deltaHalfWidth, deltaHeight);	
 	CtrlMovePos(&m_playProgressCtrl, 0, deltaHeight);
 	CtrlAddSize(&m_playProgressCtrl, deltaHalfWidth, 0);
+	CtrlMovePos(&m_cacheStatusCtrl, 0, deltaHeight);
 	CtrlMovePos(&m_playCtrl, 0, deltaHeight);
 	CtrlMovePos(&m_stopCtrl, 0, deltaHeight);
 	CtrlMovePos(&m_reverseCtrl, 0, deltaHeight);
@@ -267,7 +271,10 @@ void CRecordDlg::InitAllCtrl()
 	InitGrids(CSettingManager::GetInstance()->GetRowCount(), CSettingManager::GetInstance()->GetColumnCount());
 
 	// 启动屏幕控件刷新窗口	
-	SetTimer(REFRESH_SCREEN_CTRL_TIMER_ID, 16, NULL);
+	if (SetTimer(REFRESH_SCREEN_CTRL_TIMER_ID, 5, NULL) == NULL)
+	{
+		LOG_ERROR(L"failed to set a timer, error is %d", GetLastError());
+	}
 }
 
 void CRecordDlg::DestroyGrids()
@@ -618,54 +625,29 @@ void CRecordDlg::CtrlShowBitmap(CStatic* ctrl, HBITMAP_SHARED_PTR bitmap)
 
 void CRecordDlg::PlayWindowShowBitmap(HBITMAP_SHARED_PTR bitmap)
 {
-	Gdiplus::Bitmap* originalImage = Gdiplus::Bitmap::FromHBITMAP(bitmap.get(), NULL);
-	if (originalImage == nullptr)
-	{
-		LOG_ERROR(L"failed to load image from HBITMAP");
-		return;
-	}
-
-	int imageWidth = originalImage->GetWidth();
-	int imageHeight = originalImage->GetHeight();
-
 	CRect rect;
 	m_playWindowCtrl.GetClientRect(rect);
-	int controlWidth = rect.Width();
-	int controlHeight = rect.Height();
-	double widthRatio = controlWidth * 1.0 / imageWidth;
-	double heightRatio = controlHeight * 1.0 / imageHeight;
-	double aspectRatio = min(widthRatio, heightRatio);
-	int displayWidth = (int)(imageWidth * aspectRatio);
-	int displayHeight = (int)(imageHeight * aspectRatio);
-	Gdiplus::Bitmap* scaledImagePtr = new Gdiplus::Bitmap(displayWidth, displayHeight, originalImage->GetPixelFormat());
-	Gdiplus::Bitmap& scaledImage = *scaledImagePtr;
-	Gdiplus::Graphics graphics(&scaledImage);
-	graphics.SetInterpolationMode(Gdiplus::InterpolationMode::InterpolationModeHighQualityBicubic);
-	graphics.DrawImage(originalImage, 0, 0, displayWidth, displayHeight);
-	delete originalImage;
-	originalImage = nullptr;
 
-	m_playImage.Reset();
-	m_playImage.m_image = scaledImagePtr;
-	m_playImage.m_defaultScaleRatio = (float)aspectRatio;
-	m_playImage.m_cropWidth = displayWidth;
-	m_playImage.m_cropHeight = displayHeight;
-	m_playImage.m_centerPos = CPoint(displayWidth/2, displayHeight/2);
+	CImageItem newImageItem;
+	newImageItem.m_rawImage = bitmap;
+	newImageItem.m_controlWidth = rect.Width();
+	newImageItem.m_controlHeight = rect.Height();
+	m_playImageHandler.AddImage(newImageItem);
 
-	if (m_playWindowCtrl.GetBitmap() != NULL)
+	CImageItem displayImageItem;
+	if (!m_playImageHandler.GetImage(displayImageItem))
 	{
-		DeleteObject(m_playWindowCtrl.GetBitmap());
-		m_playWindowCtrl.SetBitmap(NULL);
-	}
-
-	HBITMAP hScaledImage = NULL;
-	Gdiplus::Status status = scaledImage.GetHBITMAP(Gdiplus::Color::Black, &hScaledImage);
-	if (status != Gdiplus::Ok)
-	{
-		LOG_ERROR(L"failed to call GetHBITMAP, error is %d", status);
 		return;
 	}
 
+	m_playImage.Reset();
+	m_playImage.m_image = displayImageItem.m_scaledImage;
+	m_playImage.m_defaultScaleRatio = displayImageItem.m_aspectRatio;
+	m_playImage.m_cropWidth = displayImageItem.m_scaledImage->GetWidth();
+	m_playImage.m_cropHeight = displayImageItem.m_scaledImage->GetHeight();
+	m_playImage.m_centerPos = CPoint(m_playImage.m_cropWidth /2, m_playImage.m_cropHeight /2);
+
+	HBITMAP hScaledImage = displayImageItem.m_hScaledImage;
 	HBITMAP hOldBmp = m_playWindowCtrl.SetBitmap(hScaledImage);
 	if (hOldBmp != NULL)
 	{
@@ -1239,6 +1221,7 @@ void CRecordDlg::OnTimer(UINT_PTR nIDEvent)
 		int deltaTime = (int)(nowTick - lastTick);
 		RefreshScreenCtrl(deltaTime);
 		RefreshPlayWindow(deltaTime);
+		RefreshCacheStatusCtrl(deltaTime);
 		lastTick = nowTick;
 	}
 
@@ -1266,6 +1249,25 @@ void CRecordDlg::RefreshPlayWindow(int deltaTime)
 	}
 }
 
+void CRecordDlg::RefreshCacheStatusCtrl(int deltaTime)
+{
+	int interval = 1000;
+	static int totalDelta = 0;
+	totalDelta += deltaTime;
+	if (totalDelta >= interval)
+	{		
+		totalDelta -= interval;
+		if (CDataManager::Get()->IsCaching())
+		{
+			m_cacheStatusCtrl.SetWindowText(L"缓存中");
+		}
+		else
+		{
+			m_cacheStatusCtrl.SetWindowText(L"缓存停止");
+		}
+	}
+}
+
 void CRecordDlg::RefreshScreenCtrl(int deltaTime)
 {
 	static int refreshInterval = 1000 / CSettingManager::GetInstance()->GetRecordFrameRate();
@@ -1277,7 +1279,30 @@ void CRecordDlg::RefreshScreenCtrl(int deltaTime)
 		HBITMAP_SHARED_PTR frame = CDataManager::Get()->GetLatestRecordFrame();
 		if (frame.get() != NULL)
 		{
-			CtrlShowBitmap(&m_screenCtrl, frame);
+			CRect rect;
+			m_screenCtrl.GetClientRect(rect);
+
+			CImageItem newImageItem;
+			newImageItem.m_rawImage = frame;
+			newImageItem.m_controlWidth = rect.Width();
+			newImageItem.m_controlHeight = rect.Height();
+			m_screenImageHandler.AddImage(newImageItem);
+		}
+
+		CImageItem displayImageItem;
+		if (m_screenImageHandler.GetImage(displayImageItem))
+		{
+			delete displayImageItem.m_scaledImage;
+			HBITMAP hBitmap = displayImageItem.m_hScaledImage;
+			HBITMAP hOldBmp = m_screenCtrl.SetBitmap(hBitmap);
+			if (hOldBmp != NULL)
+			{
+				DeleteObject(hOldBmp);
+			}
+			if (m_screenCtrl.GetBitmap() != hBitmap)
+			{
+				DeleteObject(hBitmap);
+			}
 		}
 	}	
 }

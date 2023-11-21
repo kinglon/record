@@ -75,6 +75,9 @@
     <ClInclude Include="ImageDisplayCtrl.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="ImageHandler.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="record.cpp">
@@ -117,6 +120,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="ImageDisplayCtrl.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="ImageHandler.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

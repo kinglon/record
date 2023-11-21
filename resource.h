@@ -28,6 +28,7 @@
 #define IDC_SCREEN_CTRL                 1018
 #define IDC_PLAY_CONTENT                1019
 #define IDC_PLAY_WINDOW_CTRL            1020
+#define IDC_CACHE_STATUS                1021
 
 // Next default values for new objects
 // 
@@ -35,7 +36,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        132
 #define _APS_NEXT_COMMAND_VALUE         32771
-#define _APS_NEXT_CONTROL_VALUE         1021
+#define _APS_NEXT_CONTROL_VALUE         1022
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

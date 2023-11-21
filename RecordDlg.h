@@ -3,6 +3,7 @@
 #include <vector>
 #include "DataManager.h"
 #include "ImageDisplayCtrl.h"
+#include "ImageHandler.h"
 
 #define CONTENT_TYPE_UNKNOWN   0  //还未指定
 #define CONTENT_TYPE_CACHE  1  //缓存
@@ -131,6 +132,8 @@ private:
 
 	void RefreshPlayWindow(int deltaTime);
 
+	void RefreshCacheStatusCtrl(int deltaTime);
+
 private:
 	int m_initSizeX = 0;
 
@@ -152,6 +155,12 @@ private:
 	POINT m_mousePos;
 
 	bool m_movingPlayingImage = false;
+
+	// 实时刷新屏幕的图片处理器
+	CImageHandler m_screenImageHandler;
+
+	// 播放窗口的图片处理器
+	CImageHandler m_playImageHandler;
 
 // 实现
 protected:
@@ -202,4 +211,5 @@ public:
 	afx_msg BOOL OnMouseWheel(UINT nFlags, short zDelta, CPoint pt);
 //	afx_msg void OnNMCustomdrawPlayCacheSpeedCtrl(NMHDR* pNMHDR, LRESULT* pResult);
 	afx_msg void OnThumbposchangingPlayCacheSpeedCtrl(NMHDR* pNMHDR, LRESULT* pResult);
+	CStatic m_cacheStatusCtrl;
 };
