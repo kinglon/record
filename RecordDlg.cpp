@@ -632,31 +632,7 @@ void CRecordDlg::PlayWindowShowBitmap(HBITMAP_SHARED_PTR bitmap)
 	newImageItem.m_rawImage = bitmap;
 	newImageItem.m_controlWidth = rect.Width();
 	newImageItem.m_controlHeight = rect.Height();
-	m_playImageHandler.AddImage(newImageItem);
-
-	CImageItem displayImageItem;
-	if (!m_playImageHandler.GetImage(displayImageItem))
-	{
-		return;
-	}
-
-	m_playImage.Reset();
-	m_playImage.m_image = displayImageItem.m_scaledImage;
-	m_playImage.m_defaultScaleRatio = displayImageItem.m_aspectRatio;
-	m_playImage.m_cropWidth = displayImageItem.m_scaledImage->GetWidth();
-	m_playImage.m_cropHeight = displayImageItem.m_scaledImage->GetHeight();
-	m_playImage.m_centerPos = CPoint(m_playImage.m_cropWidth /2, m_playImage.m_cropHeight /2);
-
-	HBITMAP hScaledImage = displayImageItem.m_hScaledImage;
-	HBITMAP hOldBmp = m_playWindowCtrl.SetBitmap(hScaledImage);
-	if (hOldBmp != NULL)
-	{
-		DeleteObject(hOldBmp);
-	}
-	if (m_playWindowCtrl.GetBitmap() != hScaledImage)
-	{
-		DeleteObject(hScaledImage);
-	}
+	m_playImageHandler.AddImage(newImageItem);	
 }
 
 void CRecordDlg::PlayWindowScaleBitmap(HBITMAP_SHARED_PTR bitmap, float scaleFactor)
@@ -1023,6 +999,7 @@ void CRecordDlg::StopPlay(bool complete)
 
 void CRecordDlg::ClearCacheAndCapture(bool cache, bool capture)
 {
+	bool bClear = false;
 	if (cache && capture)
 	{
 		if (MessageBox(L"确定清空截图和缓存吗？", L"提示", MB_OKCANCEL) == IDOK)
@@ -1031,6 +1008,7 @@ void CRecordDlg::ClearCacheAndCapture(bool cache, bool capture)
 			RefreshCacheCtrls();
 			CDataManager::Get()->ClearCaptureData();
 			RefreshGrids();
+			bClear = true;
 		}
 	}
 	else if (cache)
@@ -1039,6 +1017,7 @@ void CRecordDlg::ClearCacheAndCapture(bool cache, bool capture)
 		{
 			CDataManager::Get()->ClearCacheData();
 			RefreshCacheCtrls();
+			bClear = true;
 		}
 	}
 	else if (capture)
@@ -1047,6 +1026,21 @@ void CRecordDlg::ClearCacheAndCapture(bool cache, bool capture)
 		{
 			CDataManager::Get()->ClearCaptureData();
 			RefreshGrids();
+			bClear = true;
+		}
+	}
+
+	// 清除当前播放内容
+	if (bClear)
+	{
+		if ((cache && m_playContent.m_contentType == CONTENT_TYPE_CACHE) ||
+			(capture && m_playContent.m_contentType == CONTENT_TYPE_CAPTURE))
+		{
+			StopPlay(false);
+			m_playContent.m_contentType = CONTENT_TYPE_UNKNOWN;
+			m_playFrames.clear();
+			m_playImage.m_image = NULL;
+			CtrlShowBlack(&m_playWindowCtrl);
 		}
 	}
 }
@@ -1230,6 +1224,29 @@ void CRecordDlg::OnTimer(UINT_PTR nIDEvent)
 
 void CRecordDlg::RefreshPlayWindow(int deltaTime)
 {
+	// 只要有新图片就显示它，帧率由增加图片处理来控制
+	CImageItem displayImageItem;
+	if (m_playImageHandler.GetImage(displayImageItem))
+	{
+		m_playImage.Reset();
+		m_playImage.m_image = displayImageItem.m_scaledImage;
+		m_playImage.m_defaultScaleRatio = displayImageItem.m_aspectRatio;
+		m_playImage.m_cropWidth = displayImageItem.m_scaledImage->GetWidth();
+		m_playImage.m_cropHeight = displayImageItem.m_scaledImage->GetHeight();
+		m_playImage.m_centerPos = CPoint(m_playImage.m_cropWidth / 2, m_playImage.m_cropHeight / 2);
+
+		HBITMAP hScaledImage = displayImageItem.m_hScaledImage;
+		HBITMAP hOldBmp = m_playWindowCtrl.SetBitmap(hScaledImage);
+		if (hOldBmp != NULL)
+		{
+			DeleteObject(hOldBmp);
+		}
+		if (m_playWindowCtrl.GetBitmap() != hScaledImage)
+		{
+			DeleteObject(hScaledImage);
+		}
+	}	
+
 	if (m_playInterval == 0)
 	{
 		return;
