@@ -6,7 +6,7 @@
 #include "ImageHandler.h"
 #include <atlimage.h>
 
-#define MAX_BUFFER_SIZE  60
+#define MAX_BUFFER_SIZE  1
 
 IMPLEMENT_DYNCREATE(CImageHandler, CWinThread)
 
