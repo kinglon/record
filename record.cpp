@@ -87,14 +87,14 @@ BOOL CRecordApp::InitInstance()
 
 	CoInitialize(nullptr);
 
-	g_dllLog = CLogUtil::GetLog(L"main");
+	//g_dllLog = CLogUtil::GetLog(L"main");
 
 	//初始化崩溃转储机制
 	CDumpUtil::SetDumpFilePath(CImPath::GetDumpPath().c_str());
 	CDumpUtil::Enable(true);
 
 	int nLogLevel = CSettingManager::GetInstance()->GetLogLevel();
-	g_dllLog->SetLogLevel((ELogLevel)nLogLevel);
+	//g_dllLog->SetLogLevel((ELogLevel)nLogLevel);
 
 	// Initialize GDI+
 	GdiplusStartupInput gdiplusStartupInput;
